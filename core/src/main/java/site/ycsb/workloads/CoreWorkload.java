@@ -356,6 +356,9 @@ public class CoreWorkload extends Workload {
    */
   public static final String FIELD_NAME_PREFIX_DEFAULT = "field";
 
+  public static final String COMPRESSIBILITY_PROPERTY = "compressibility";
+  public static final String COMPRESSIBILITY_PROPERTY_DEFAULT = "100";
+
   protected NumberGenerator keysequence;
   protected DiscreteGenerator operationchooser;
   protected NumberGenerator keychooser;
@@ -368,6 +371,7 @@ public class CoreWorkload extends Workload {
   protected int zeropadding;
   protected int insertionRetryLimit;
   protected int insertionRetryInterval;
+  protected int compressibility;
 
   private Measurements measurements = Measurements.getMeasurements();
 
@@ -422,6 +426,9 @@ public class CoreWorkload extends Workload {
   public void init(Properties p) throws WorkloadException {
     table = p.getProperty(TABLENAME_PROPERTY, TABLENAME_PROPERTY_DEFAULT);
 
+    compressibility = 
+        Integer.parseInt(p.getProperty(COMPRESSIBILITY_PROPERTY, COMPRESSIBILITY_PROPERTY_DEFAULT));
+    
     fieldcount =
         Long.parseLong(p.getProperty(FIELD_COUNT_PROPERTY, FIELD_COUNT_PROPERTY_DEFAULT));
     final String fieldnameprefix = p.getProperty(FIELD_NAME_PREFIX, FIELD_NAME_PREFIX_DEFAULT);
@@ -556,10 +563,10 @@ public class CoreWorkload extends Workload {
     String fieldkey = fieldnames.get(fieldchooser.nextValue().intValue());
     ByteIterator data;
     if (dataintegrity) {
-      data = new StringByteIterator(buildDeterministicValue(key, fieldkey));
+      data = new StringByteIterator(buildDeterministicValue(key, fieldkey, compressibility));
     } else {
       // fill with random data
-      data = new RandomByteIterator(fieldlengthgenerator.nextValue().longValue());
+      data = new StringByteIterator(buildDeterministicValue(key, fieldkey, compressibility));
     }
     value.put(fieldkey, data);
 
@@ -575,10 +582,10 @@ public class CoreWorkload extends Workload {
     for (String fieldkey : fieldnames) {
       ByteIterator data;
       if (dataintegrity) {
-        data = new StringByteIterator(buildDeterministicValue(key, fieldkey));
+        data = new StringByteIterator(buildDeterministicValue(key, fieldkey, compressibility));
       } else {
         // fill with random data
-        data = new RandomByteIterator(fieldlengthgenerator.nextValue().longValue());
+        data = new StringByteIterator(buildDeterministicValue(key, fieldkey, compressibility));
       }
       values.put(fieldkey, data);
     }
@@ -588,13 +595,15 @@ public class CoreWorkload extends Workload {
   /**
    * Build a deterministic value given the key information.
    */
-  private String buildDeterministicValue(String key, String fieldkey) {
+  private String buildDeterministicValue(String key, String fieldkey, int comp) {
     int size = fieldlengthgenerator.nextValue().intValue();
     StringBuilder sb = new StringBuilder(size);
-    sb.append(key);
-    sb.append(':');
-    sb.append(fieldkey);
     while (sb.length() < size) {
+      for (int i = 0; i < comp; i++) {
+        sb.append(key);
+        sb.append(':');
+        sb.append(fieldkey);
+      }
       sb.append(':');
       sb.append(sb.toString().hashCode());
     }
@@ -691,7 +700,7 @@ public class CoreWorkload extends Workload {
     long startTime = System.nanoTime();
     if (!cells.isEmpty()) {
       for (Map.Entry<String, ByteIterator> entry : cells.entrySet()) {
-        if (!entry.getValue().toString().equals(buildDeterministicValue(key, entry.getKey()))) {
+        if (!entry.getValue().toString().equals(buildDeterministicValue(key, entry.getKey(), compressibility))) {
           verifyStatus = Status.UNEXPECTED_STATE;
           break;
         }
