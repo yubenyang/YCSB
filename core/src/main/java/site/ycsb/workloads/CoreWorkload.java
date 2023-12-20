@@ -598,14 +598,17 @@ public class CoreWorkload extends Workload {
   private String buildDeterministicValue(String key, String fieldkey, int comp) {
     int size = fieldlengthgenerator.nextValue().intValue();
     StringBuilder sb = new StringBuilder(size);
+    String pattern = key + ":" + fieldkey + ":";
+    int i = 0;
     while (sb.length() < size) {
-      for (int i = 0; i < comp; i++) {
-        sb.append(key);
-        sb.append(':');
-        sb.append(fieldkey);
+      if (i < comp) {
+        sb.append(pattern);
+        i++;
+      } else {
+        String hash = (sb.length() + pattern).hashCode() + ":";
+        sb.append(hash);
+        i = 0;
       }
-      sb.append(':');
-      sb.append(sb.toString().hashCode());
     }
     sb.setLength(size);
 
