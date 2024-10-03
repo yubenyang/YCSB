@@ -773,7 +773,7 @@ public class CoreWorkload extends Workload {
       fields = new HashSet<String>();
       fields.add(fieldname);
     }
-
+    /*
     HashMap<String, ByteIterator> values;
 
     if (writeallfields) {
@@ -783,7 +783,7 @@ public class CoreWorkload extends Workload {
       // update a random field
       values = buildSingleValue(keyname);
     }
-
+    */
     // do the transaction
 
     HashMap<String, ByteIterator> cells = new HashMap<String, ByteIterator>();
@@ -793,7 +793,7 @@ public class CoreWorkload extends Workload {
     long st = System.nanoTime();
     db.read(table, keyname, fields, cells);
 
-    db.update(table, keyname, values);
+    db.update(table, keyname, cells);
 
     long en = System.nanoTime();
 
