@@ -19,7 +19,6 @@ package site.ycsb.workloads;
 
 import site.ycsb.*;
 import site.ycsb.generator.*;
-import site.ycsb.generator.UniformLongGenerator;
 import site.ycsb.measurements.Measurements;
 
 import java.io.IOException;
@@ -359,6 +358,9 @@ public class CoreWorkload extends Workload {
   public static final String COMPRESSIBILITY_PROPERTY = "compressibility";
   public static final String COMPRESSIBILITY_PROPERTY_DEFAULT = "100";
 
+  public static final String CORPUS_PATH_PROPERTY = "corpus_path";
+  public static final String CORPUS_PATH_PROPERTY_DEFAULT = null;
+
   protected NumberGenerator keysequence;
   protected DiscreteGenerator operationchooser;
   protected NumberGenerator keychooser;
@@ -372,6 +374,8 @@ public class CoreWorkload extends Workload {
   protected int insertionRetryLimit;
   protected int insertionRetryInterval;
   protected int compressibility;
+  protected String corpusPath;
+  protected Corpus corpus;
 
   private Measurements measurements = Measurements.getMeasurements();
 
@@ -425,6 +429,16 @@ public class CoreWorkload extends Workload {
   @Override
   public void init(Properties p) throws WorkloadException {
     table = p.getProperty(TABLENAME_PROPERTY, TABLENAME_PROPERTY_DEFAULT);
+    corpusPath = p.getProperty(CORPUS_PATH_PROPERTY, CORPUS_PATH_PROPERTY_DEFAULT);
+    
+    if (corpusPath == null) {
+      throw new WorkloadException("Missing required property: corpusfile");
+    }
+    try {
+      corpus = new Corpus(corpusPath);
+    } catch (IOException e) {
+      throw new WorkloadException("Failed to load corpus file: " + corpusPath, e);
+    }
 
     compressibility = 
         Integer.parseInt(p.getProperty(COMPRESSIBILITY_PROPERTY, COMPRESSIBILITY_PROPERTY_DEFAULT));
@@ -557,18 +571,11 @@ public class CoreWorkload extends Workload {
   /**
    * Builds a value for a randomly chosen field.
    */
-  private HashMap<String, ByteIterator> buildSingleValue(String key) {
+  private HashMap<String, ByteIterator> buildSingleValue(String key, long keynum) {
     HashMap<String, ByteIterator> value = new HashMap<>();
 
     String fieldkey = fieldnames.get(fieldchooser.nextValue().intValue());
-    ByteIterator data;
-    if (dataintegrity) {
-      data = new StringByteIterator(buildDeterministicValue(key, fieldkey, compressibility));
-    } else {
-      // fill with random data
-      data = new StringByteIterator(buildDeterministicValue(key, fieldkey, compressibility));
-    }
-    value.put(fieldkey, data);
+    value.put(fieldkey, corpus.getChunkForKey(keynum));
 
     return value;
   }
@@ -576,18 +583,11 @@ public class CoreWorkload extends Workload {
   /**
    * Builds values for all fields.
    */
-  private HashMap<String, ByteIterator> buildValues(String key) {
+  private HashMap<String, ByteIterator> buildValues(String key, long keynum) {
     HashMap<String, ByteIterator> values = new HashMap<>();
 
     for (String fieldkey : fieldnames) {
-      ByteIterator data;
-      if (dataintegrity) {
-        data = new StringByteIterator(buildDeterministicValue(key, fieldkey, compressibility));
-      } else {
-        // fill with random data
-        data = new StringByteIterator(buildDeterministicValue(key, fieldkey, compressibility));
-      }
-      values.put(fieldkey, data);
+      values.put(fieldkey, corpus.getChunkForKey(keynum));
     }
     return values;
   }
@@ -625,7 +625,7 @@ public class CoreWorkload extends Workload {
   public boolean doInsert(DB db, Object threadstate) {
     int keynum = keysequence.nextValue().intValue();
     String dbkey = CoreWorkload.buildKeyName(keynum, zeropadding, orderedinserts);
-    HashMap<String, ByteIterator> values = buildValues(dbkey);
+    HashMap<String, ByteIterator> values = buildValues(dbkey, keynum);
 
     Status status;
     int numOfRetries = 0;
@@ -837,10 +837,10 @@ public class CoreWorkload extends Workload {
 
     if (writeallfields) {
       // new data for all the fields
-      values = buildValues(keyname);
+      values = buildValues(keyname, keynum);
     } else {
       // update a random field
-      values = buildSingleValue(keyname);
+      values = buildSingleValue(keyname, keynum);
     }
 
     db.update(table, keyname, values);
@@ -853,7 +853,7 @@ public class CoreWorkload extends Workload {
     try {
       String dbkey = CoreWorkload.buildKeyName(keynum, zeropadding, orderedinserts);
 
-      HashMap<String, ByteIterator> values = buildValues(dbkey);
+      HashMap<String, ByteIterator> values = buildValues(dbkey, keynum);
       db.insert(table, dbkey, values);
     } finally {
       transactioninsertkeysequence.acknowledge(keynum);
